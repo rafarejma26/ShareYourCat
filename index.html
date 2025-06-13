@@ -38,13 +38,6 @@
     .upload-form {
       margin-top: auto;
     }
-    .upload-form input[type="file"] {
-      width: 100%;
-      margin-top: 10px;
-      padding: 10px;
-      border: none;
-      border-radius: 5px;
-    }
     .photo {
       margin-bottom: 15px;
     }
@@ -92,90 +85,105 @@
       cursor: pointer;
     }
   </style>
+  <!-- Firebase SDK -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import {
+      getDatabase, ref, push, onValue, update
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+    import {
+      getStorage, ref as sRef, uploadBytes, getDownloadURL
+    } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyC0fHUa7AExEXAMPLE",
+      authDomain: "shareyourcat-demo.firebaseapp.com",
+      databaseURL: "https://shareyourcat-demo-default-rtdb.firebaseio.com",
+      projectId: "shareyourcat-demo",
+      storageBucket: "shareyourcat-demo.appspot.com",
+      messagingSenderId: "123456789012",
+      appId: "1:123456789012:web:exampleid"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const storage = getStorage(app);
+
+    const feed = document.getElementById('photo-feed');
+
+    function renderPost(id, data) {
+      const div = document.createElement('div');
+      div.className = 'photo';
+      div.innerHTML = \`
+        <img src="\${data.url}" alt="cat" />
+        <p><strong>\${data.name}</strong></p>
+        <div class="interactions">
+          <button onclick="toggleLike('\${id}', this)">❤️ Like</button>
+          <span class="like-count">\${data.likes || 0}</span> likes
+        </div>
+        <div class="comment-box">
+          <input type="text" placeholder="Add a comment..." />
+          <button onclick="addComment('\${id}', this)">Post</button>
+        </div>
+      \`;
+      feed.prepend(div);
+    }
+
+    function loadPosts() {
+      const postsRef = ref(db, 'posts');
+      onValue(postsRef, snapshot => {
+        feed.innerHTML = '';
+        snapshot.forEach(child => renderPost(child.key, child.val()));
+      });
+    }
+
+    window.toggleLike = function(id, btn) {
+      const countSpan = btn.nextElementSibling;
+      const count = parseInt(countSpan.textContent);
+      const liked = btn.classList.toggle('liked');
+      const newCount = liked ? count + 1 : count - 1;
+      btn.textContent = liked ? '💔 Unlike' : '❤️ Like';
+      countSpan.textContent = newCount;
+      update(ref(db, 'posts/' + id), { likes: newCount });
+    }
+
+    window.addComment = function(id, btn) {
+      const input = btn.previousElementSibling;
+      if (!input.value.trim()) return;
+      alert("Comments feature under development.");
+      input.value = '';
+    }
+
+    window.uploadCat = function() {
+      const file = document.getElementById('fileInput').files[0];
+      if (!file) return;
+      const storageRef = sRef(storage, 'cats/' + file.name);
+      uploadBytes(storageRef, file).then(snapshot => {
+        getDownloadURL(snapshot.ref).then(url => {
+          const post = {
+            url,
+            name: 'New Cat',
+            likes: 0
+          };
+          push(ref(db, 'posts'), post);
+        });
+      });
+    }
+
+    window.onload = loadPosts;
+  </script>
 </head>
 <body>
-  <div class="sidebar" id="photo-feed">
-    <div class="photo highlight">
-      <img src="IMG_20250612_151712_933.jpg" alt="Kratos" />
-      <p>This is my cat: <strong>Kratos</strong> 🐾</p>
-      <div class="interactions">
-        <button onclick="toggleLike(this)">❤️ Like</button>
-        <span class="like-count">0</span> likes
-      </div>
-      <div class="comment">What do you think? Isn't he adorable?</div>
-      <div class="comment-box">
-        <input type="text" placeholder="Add a comment..." />
-        <button onclick="addComment(this)">Post</button>
-      </div>
-    </div>
-  </div>
+  <div class="sidebar" id="photo-feed"></div>
   <div class="main">
     <div class="search">
       <input type="text" placeholder="Search cats..." />
     </div>
     <div class="upload-form">
       <h3>Share your cat:</h3>
-      <input type="file" id="fileInput" onchange="uploadCat()" />
+      <input type="file" id="fileInput" />
+      <button onclick="uploadCat()">Upload</button>
     </div>
   </div>
-
-  <script>
-    function toggleLike(button) {
-      const countSpan = button.nextElementSibling;
-      let count = parseInt(countSpan.textContent);
-      if (button.classList.contains("liked")) {
-        count--;
-        button.classList.remove("liked");
-        button.textContent = "❤️ Like";
-      } else {
-        count++;
-        button.classList.add("liked");
-        button.textContent = "💔 Unlike";
-      }
-      countSpan.textContent = count;
-    }
-
-    function addComment(btn) {
-      const container = btn.closest(".photo");
-      const input = container.querySelector(".comment-box input");
-      if (!input.value.trim()) return;
-
-      const comment = document.createElement("div");
-      comment.className = "comment";
-      comment.textContent = input.value;
-      container.appendChild(comment);
-      input.value = "";
-    }
-
-    function uploadCat() {
-      const input = document.getElementById('fileInput');
-      const file = input.files[0];
-      if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = function(e) {
-        const imgURL = e.target.result;
-        const photoDiv = document.createElement('div');
-        photoDiv.classList.add('photo');
-
-        photoDiv.innerHTML = `
-          <img src="${imgURL}" alt="New Cat" />
-          <p>New post</p>
-          <div class="interactions">
-            <button onclick="toggleLike(this)">❤️ Like</button>
-            <span class="like-count">0</span> likes
-          </div>
-          <div class="comment-box">
-            <input type="text" placeholder="Add a comment..." />
-            <button onclick="addComment(this)">Post</button>
-          </div>
-        `;
-
-        document.getElementById('photo-feed').appendChild(photoDiv);
-        input.value = "";
-      };
-      reader.readAsDataURL(file);
-    }
-  </script>
 </body>
 </html>
